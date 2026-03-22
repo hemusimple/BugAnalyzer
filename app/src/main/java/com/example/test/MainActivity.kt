@@ -18,6 +18,10 @@ class MainActivity : AppCompatActivity() {
         Log.i("LoginService","receive login details, user hey there ${data}")
         Log.i("LoginService","send login response")
         Log.i("LoginRepository","receive login response")
+        // New log
+        Log.i("LoginRepository","receive login response")
+
+        getUserDetails()!!.subSequence(0,1)
 
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
@@ -25,4 +29,6 @@ class MainActivity : AppCompatActivity() {
             insets
         }
     }
+
+    fun getUserDetails(): String? = null
 }
