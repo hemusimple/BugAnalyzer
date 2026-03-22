@@ -21,7 +21,7 @@ class MainActivity : AppCompatActivity() {
         // New log
         Log.i("LoginRepository","receive login response")
 
-        getUserDetails()!!.subSequence(0,1)
+        getUserDetails()?.subSequence(0,1)
 
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
