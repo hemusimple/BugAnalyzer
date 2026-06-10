@@ -1,0 +1,189 @@
+@startuml Android Log Analyzer — Full Architecture
+
+!theme plain
+skinparam backgroundColor #FAFAFA
+skinparam defaultFontName Arial
+skinparam defaultFontSize 12
+skinparam ArrowColor #555555
+skinparam ArrowThickness 1.5
+
+skinparam actor {
+  BackgroundColor #DDEEFF
+  BorderColor #3366AA
+}
+
+skinparam database {
+  BackgroundColor #FFF8DC
+  BorderColor #B8860B
+}
+
+skinparam cloud {
+  BackgroundColor #E8F4E8
+  BorderColor #2E7D32
+}
+
+skinparam rectangle {
+  RoundCorner 12
+}
+
+' ─────────────────────────────────────────
+'  EXTERNAL ACTORS
+' ─────────────────────────────────────────
+actor "Developer\n(Browser / API)" as Dev #DDEEFF
+actor "Jira Cloud" as Jira #E8F4E8
+
+cloud "GitHub / GitLab" as GitHost #E8F4E8
+cloud "Ollama\n(qwen2.5-coder:7b)" as Ollama #FFE8CC
+
+' ─────────────────────────────────────────
+'  DATA STORES
+' ─────────────────────────────────────────
+database "data/repos/\nCloned Source Code" as ReposDir #FFF8DC
+database "data/indexes/\nJSON Vector Index" as IndexDir #FFF8DC
+database "data/logs/\nUploaded Log Files" as LogsDir #FFF8DC
+
+' ─────────────────────────────────────────
+'  FASTAPI APPLICATION
+' ─────────────────────────────────────────
+package "FastAPI Application  (api/main.py)" #EEF2FF {
+
+  rectangle "REST Endpoints" as REST #D0D8FF {
+    rectangle "POST /api/analyze\n(upload log file)" as EP_Analyze
+    rectangle "POST /api/repos/add\nGET  /api/repos\nPOST /api/repos/rebuild" as EP_Repos
+    rectangle "GET  /api/status\nGET  /api/logs" as EP_Status
+  }
+
+  rectangle "WebSocket\n/ws/analyze\n(streaming steps + tokens)" as WS #D0D8FF
+
+  rectangle "Jira Webhook\nPOST /webhook/jira" as EP_Webhook #D0D8FF
+}
+
+' ─────────────────────────────────────────
+'  AGENT LAYER
+' ─────────────────────────────────────────
+package "Agent Layer" #FFF0F0 {
+
+  rectangle "Jira Client\n(agent/jira_client.py)\n\n• verify_webhook_signature()\n• download_all_attachments()\n• post_analysis_comment()" as JiraClient #FFD0D0
+
+  rectangle "Repo Manager\n(agent/repo_manager.py)\n\n• clone_or_pull()\n• startup_index_repos()\n• load_all_existing()" as RepoMgr #FFD0D0
+
+  rectangle "Log Parser\n(agent/log_parser.py)\n\n• parse_log_file()  →  LogSession\n• errors / exceptions / timeouts\n• unique tags seen" as LogParser #FFD0D0
+
+  rectangle "Code Indexer\n(agent/code_indexer.py)\n\n• build()  →  chunks + tag map\n• search_all()  (TF-IDF)\n• lookup_tag_all()" as CodeIndexer #FFD0D0
+
+  rectangle "Architecture Analyzer\n(agent/architecture_analyzer.py)\n\n• analyze_repos()  →  ArchitectureMap\n• detect_layer()  (path + class hints)\n• build_blame_context()" as ArchAnalyzer #FFD0D0
+
+  rectangle "LLM Client\n(agent/llm_client.py)\n\n• OllamaClient.chat()\n• streaming  /  blocking\n• TokenUsage tracking" as LLMClient #FFD0D0
+}
+
+' ─────────────────────────────────────────
+'  REACT ORCHESTRATOR
+' ─────────────────────────────────────────
+package "ReAct Orchestrator  (agent/orchestrator.py)" #F0FFF0 {
+
+  rectangle "LogAnalyzerAgent.analyze()" as ReactLoop #C8EFC8 {
+    rectangle "1. Parse Log File" as Step1
+    rectangle "2. Build Initial User Message\n   (errors, tags, issue summary)" as Step2
+    rectangle "3. ReAct Loop  (max 15 steps)\n   LLM → Think → Act → Observe" as Step3
+    rectangle "4. Extract Verdict + Blame Layer" as Step4
+  }
+
+  rectangle "Tools Registry\n(agent/tools.py)" as Tools #C8EFC8 {
+    rectangle "get_log_summary\nget_errors_and_exceptions\nsearch_logs" as LogTools
+    rectangle "search_code\nread_file\nlookup_log_tag" as CodeTools
+    rectangle "get_architecture_map\nblame_analysis\nnote / index_stats" as ArchTools
+  }
+}
+
+' ─────────────────────────────────────────
+'  ngrok TUNNEL
+' ─────────────────────────────────────────
+rectangle "ngrok Tunnel\n(public HTTPS URL)" as Ngrok #E8E8FF
+
+' ═══════════════════════════════════════════
+'  CONNECTIONS
+' ═══════════════════════════════════════════
+
+' --- External → API ---
+Dev         --> REST       : HTTP REST
+Dev         --> WS         : WebSocket
+Jira        --> Ngrok      : POST /webhook/jira\n(HTTPS)
+Ngrok       --> EP_Webhook : forward
+
+' --- Webhook flow ---
+EP_Webhook  --> JiraClient : verify_webhook_signature()
+JiraClient  --> Jira       : download_all_attachments()\npost_analysis_comment()
+
+' --- Repo management ---
+EP_Repos    --> RepoMgr    : add / rebuild
+RepoMgr     --> GitHost    : git clone / pull
+RepoMgr     --> CodeIndexer: build index
+CodeIndexer --> ReposDir   : read source files
+CodeIndexer --> IndexDir   : save/load .json index
+
+' --- Log upload / analysis entry ---
+EP_Analyze  --> LogParser  : parse_log_file()
+WS          --> LogParser  : parse_log_file()
+JiraClient  --> LogParser  : (attachment path)
+LogParser   --> LogsDir    : read log file
+
+' --- Orchestrator wiring ---
+EP_Analyze  --> ReactLoop  : analyze()
+WS          --> ReactLoop  : analyze() + on_step callback
+JiraClient  --> ReactLoop  : _auto_analyze_jira_issue()
+
+ReactLoop   --> Step1
+Step1       --> LogParser
+Step2       --> Step3
+Step3       --> Tools      : call_tool()
+Step4       --> ReactLoop
+
+' --- Tools → subsystems ---
+LogTools    --> LogParser   : ctx.log_session
+CodeTools   --> CodeIndexer : registry.search_all()\nlookup_tag_all()
+ArchTools   --> ArchAnalyzer: get_arch_map()\nbuild_blame_context()
+ArchAnalyzer --> CodeIndexer: registry.all_indexes()
+
+' --- LLM calls ---
+Step3       --> LLMClient  : chat(messages, stream=True)
+LLMClient   --> Ollama     : POST /api/chat\n(qwen2.5-coder:7b\nctx=32768)
+
+' ═══════════════════════════════════════════
+'  STARTUP SEQUENCE note
+' ═══════════════════════════════════════════
+note bottom of RepoMgr
+  **Startup sequence**
+  1. load_all_existing() — restore saved indexes
+  2. clone_or_pull() each REPO_URL
+  3. CodeIndexer.build() → chunks + log tags
+  4. ArchitectureMap cached in memory
+end note
+
+note right of Step3
+  **ReAct Loop detail**
+  for each step (max 15):
+    LLM streams response
+    parse <think>…</think>
+    parse <action>{tool, args}</action>
+    call_tool() → observation
+    append to messages
+  until <final_answer> found
+end note
+
+note right of Ollama
+  **Model config (.env)**
+  OLLAMA_MODEL=qwen2.5-coder:7b
+  OLLAMA_CONTEXT_WINDOW=32768
+  OLLAMA_TEMPERATURE=0.1
+end note
+
+' ═══════════════════════════════════════════
+'  VERDICT OUTPUT
+' ═══════════════════════════════════════════
+rectangle "AgentResult\n\n• verdict:      APP BUG / EXTERNAL BUG / INCONCLUSIVE\n• blame_layer:  UI / ViewModel / Repository / Service / HAL\n• final_answer: markdown report\n• steps:        ReAct trace\n• token_usage:  prompt + completion" as Result #FFFFF0
+
+Step4 --> Result
+Result --> Dev     : JSON response / WebSocket done
+Result --> JiraClient : post comment to Jira issue
+
+@enduml

@@ -1,0 +1,1292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Log Analyzer Agent</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Syne:wght@400;600;800&display=swap');
+
+  :root {
+    --bg: #0a0c0f;
+    --bg2: #111418;
+    --bg3: #181d24;
+    --border: #1e2530;
+    --border2: #2a3340;
+    --accent: #00d4aa;
+    --accent2: #0088ff;
+    --accent3: #ff6b35;
+    --warn: #f5c542;
+    --error: #ff4444;
+    --success: #00d4aa;
+    --text: #c8d4e0;
+    --text2: #7a8fa0;
+    --text3: #4a5a6a;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Syne', sans-serif;
+    --app-bug: #ff4444;
+    --ext-bug: #f5c542;
+    --inconclusive: #7a8fa0;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ---- Header ---- */
+  .header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 10px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg2);
+    flex-shrink: 0;
+  }
+
+  .logo {
+    font-family: var(--sans);
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--accent);
+    letter-spacing: -0.5px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .logo-icon { font-size: 20px; }
+
+  .status-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--text2);
+  }
+
+  .status-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--text3);
+  }
+  .status-dot.ok { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+  .status-dot.err { background: var(--error); }
+
+  .header-spacer { flex: 1; }
+
+  .token-badge {
+    font-size: 11px;
+    color: var(--text2);
+    padding: 4px 10px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .token-badge:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* ---- Main layout ---- */
+  .layout {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    gap: 0;
+  }
+
+  /* ---- Sidebar ---- */
+  .sidebar {
+    width: 280px;
+    min-width: 220px;
+    background: var(--bg2);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  .sidebar-section {
+    border-bottom: 1px solid var(--border);
+    padding: 12px;
+  }
+
+  .section-title {
+    font-family: var(--sans);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--text3);
+    margin-bottom: 10px;
+  }
+
+  .input-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+
+  .input-label { font-size: 11px; color: var(--text2); }
+
+  input[type="text"], textarea, select {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 7px 10px;
+    width: 100%;
+    outline: none;
+    transition: border-color 0.15s;
+    resize: none;
+  }
+  input[type="text"]:focus, textarea:focus, select:focus {
+    border-color: var(--accent2);
+  }
+  textarea { min-height: 60px; }
+
+  .file-drop {
+    border: 1.5px dashed var(--border2);
+    border-radius: 8px;
+    padding: 14px;
+    text-align: center;
+    cursor: pointer;
+    color: var(--text2);
+    font-size: 12px;
+    transition: all 0.2s;
+    position: relative;
+  }
+  .file-drop:hover, .file-drop.over {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(0,212,170,0.04);
+  }
+  .file-drop input[type="file"] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer; padding: 0;
+  }
+  .file-drop .filename { color: var(--accent); margin-top: 4px; word-break: break-all; }
+
+  .btn {
+    font-family: var(--sans);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 8px 14px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.15s;
+    width: 100%;
+    letter-spacing: 0.3px;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: #0a0c0f;
+  }
+  .btn-primary:hover { background: #00efc0; }
+  .btn-primary:disabled { background: var(--border2); color: var(--text3); cursor: not-allowed; }
+  .btn-secondary {
+    background: var(--bg3);
+    color: var(--text);
+    border: 1px solid var(--border2);
+  }
+  .btn-secondary:hover { border-color: var(--accent2); color: var(--accent2); }
+
+  .repos-list { display: flex; flex-direction: column; gap: 4px; max-height: 100px; overflow-y: auto; }
+  .repo-item {
+    font-size: 11px;
+    color: var(--text2);
+    padding: 4px 6px;
+    background: var(--bg3);
+    border-radius: 4px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 4px;
+  }
+  .repo-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .repo-badge {
+    font-size: 10px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: rgba(0,212,170,0.15);
+    color: var(--accent);
+    flex-shrink: 0;
+  }
+
+  .logs-list { display: flex; flex-direction: column; gap: 3px; max-height: 80px; overflow-y: auto; }
+  .log-item {
+    font-size: 11px;
+    color: var(--text2);
+    padding: 3px 6px;
+    background: var(--bg3);
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex; justify-content: space-between;
+  }
+  .log-item:hover { color: var(--accent); }
+  .log-item.active { color: var(--accent); border-left: 2px solid var(--accent); }
+
+  /* ---- Content ---- */
+  .content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ---- Tabs ---- */
+  .tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg2);
+    padding: 0 16px;
+    flex-shrink: 0;
+  }
+  .tab {
+    padding: 10px 16px;
+    font-family: var(--sans);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text3);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+    user-select: none;
+  }
+  .tab:hover { color: var(--text2); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* ---- Panel area ---- */
+  .panels {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+  }
+
+  .panel-view { display: none; flex: 1; overflow: hidden; }
+  .panel-view.active { display: flex; }
+
+  /* ---- Split panel (LLM + Agent) ---- */
+  .split-panels {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    gap: 0;
+  }
+
+  .split-pane {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-right: 1px solid var(--border);
+  }
+  .split-pane:last-child { border-right: none; }
+
+  .pane-header {
+    padding: 8px 14px;
+    background: var(--bg3);
+    border-bottom: 1px solid var(--border);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text2);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .pane-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+  }
+  .pane-dot.llm { background: var(--accent2); }
+  .pane-dot.agent { background: var(--accent); }
+
+  .pane-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px;
+    font-size: 12px;
+    line-height: 1.7;
+  }
+
+  /* LLM raw output */
+  .llm-output {
+    color: var(--text2);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .think-block {
+    background: rgba(0,136,255,0.06);
+    border-left: 3px solid var(--accent2);
+    padding: 8px 12px;
+    margin: 6px 0;
+    border-radius: 0 4px 4px 0;
+    color: var(--text2);
+  }
+
+  .action-block {
+    background: rgba(255,107,53,0.06);
+    border-left: 3px solid var(--accent3);
+    padding: 8px 12px;
+    margin: 6px 0;
+    border-radius: 0 4px 4px 0;
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+
+  .observe-block {
+    background: rgba(0,212,170,0.04);
+    border-left: 3px solid var(--accent);
+    padding: 8px 12px;
+    margin: 6px 0;
+    border-radius: 0 4px 4px 0;
+    color: var(--text);
+    font-size: 11px;
+  }
+
+  /* Agent verdict */
+  .verdict-banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    border: 1px solid;
+  }
+  .verdict-banner.app-bug {
+    background: rgba(255,68,68,0.08);
+    border-color: rgba(255,68,68,0.3);
+  }
+  .verdict-banner.ext-bug {
+    background: rgba(245,197,66,0.08);
+    border-color: rgba(245,197,66,0.3);
+  }
+  .verdict-banner.inconclusive {
+    background: rgba(122,143,160,0.08);
+    border-color: rgba(122,143,160,0.3);
+  }
+
+  .verdict-icon { font-size: 24px; }
+  .verdict-text { flex: 1; }
+  .verdict-title {
+    font-family: var(--sans);
+    font-size: 15px;
+    font-weight: 800;
+  }
+  .verdict-subtitle { font-size: 11px; color: var(--text2); margin-top: 2px; }
+
+  .blame-layer {
+    display: inline-block;
+    padding: 3px 10px;
+    background: rgba(0,212,170,0.12);
+    border: 1px solid rgba(0,212,170,0.25);
+    border-radius: 20px;
+    font-size: 11px;
+    color: var(--accent);
+    margin: 4px 0 12px;
+  }
+
+  .agent-markdown {
+    line-height: 1.8;
+  }
+  .agent-markdown h2 {
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--accent);
+    margin: 14px 0 6px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  .agent-markdown h3 {
+    font-family: var(--sans);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+    margin: 10px 0 4px;
+  }
+  .agent-markdown p { margin-bottom: 8px; }
+  .agent-markdown code {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-size: 11px;
+    color: var(--accent3);
+  }
+  .agent-markdown pre {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    overflow-x: auto;
+    margin: 8px 0;
+    font-size: 11px;
+    line-height: 1.6;
+  }
+  .agent-markdown pre code { background: none; border: none; padding: 0; color: var(--text); }
+  .agent-markdown ul, .agent-markdown ol { padding-left: 20px; margin-bottom: 8px; }
+  .agent-markdown li { margin-bottom: 4px; }
+  .agent-markdown strong { color: var(--text); font-weight: 600; }
+
+  .steps-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: 16px; }
+  .step-item {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    font-size: 11px;
+    padding: 5px 8px;
+    border-radius: 4px;
+    background: var(--bg3);
+  }
+  .step-type {
+    width: 72px;
+    flex-shrink: 0;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    padding-top: 1px;
+  }
+  .step-type.think { color: var(--accent2); }
+  .step-type.action { color: var(--accent3); }
+  .step-type.observation { color: var(--accent); }
+  .step-type.final { color: var(--warn); }
+  .step-content { flex: 1; color: var(--text2); line-height: 1.5; word-break: break-word; }
+
+  /* ---- Chat panel ---- */
+  .chat-view {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .chat-msg {
+    display: flex;
+    gap: 10px;
+    max-width: 90%;
+  }
+  .chat-msg.user { align-self: flex-end; flex-direction: row-reverse; }
+  .chat-msg.assistant { align-self: flex-start; }
+
+  .msg-avatar {
+    width: 28px; height: 28px;
+    border-radius: 6px;
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px;
+    font-family: var(--sans);
+    font-weight: 800;
+  }
+  .chat-msg.user .msg-avatar {
+    background: rgba(0,136,255,0.15);
+    color: var(--accent2);
+  }
+  .chat-msg.assistant .msg-avatar {
+    background: rgba(0,212,170,0.12);
+    color: var(--accent);
+  }
+
+  .msg-bubble {
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 12px;
+    line-height: 1.7;
+    max-width: 100%;
+    word-break: break-word;
+  }
+  .chat-msg.user .msg-bubble {
+    background: rgba(0,136,255,0.10);
+    border: 1px solid rgba(0,136,255,0.2);
+  }
+  .chat-msg.assistant .msg-bubble {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    white-space: pre-wrap;
+  }
+
+  .msg-typing {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    padding: 4px 0;
+  }
+  .typing-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent);
+    animation: blink 1.2s infinite;
+  }
+  .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+  .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes blink {
+    0%, 80%, 100% { opacity: 0.2; }
+    40% { opacity: 1; }
+  }
+
+  .chat-input-area {
+    padding: 12px 16px;
+    border-top: 1px solid var(--border);
+    background: var(--bg2);
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+  }
+
+  .chat-input-wrap { flex: 1; }
+
+  textarea.chat-input {
+    min-height: 44px;
+    max-height: 120px;
+    resize: none;
+    width: 100%;
+    padding: 10px 12px;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .send-btn {
+    width: 44px; height: 44px;
+    background: var(--accent);
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    transition: background 0.15s;
+    font-size: 16px;
+  }
+  .send-btn:hover { background: #00efc0; }
+  .send-btn:disabled { background: var(--border2); cursor: not-allowed; }
+
+  /* ---- Progress overlay ---- */
+  .analyzing-bar {
+    padding: 8px 14px;
+    background: rgba(0,136,255,0.08);
+    border-bottom: 1px solid rgba(0,136,255,0.2);
+    font-size: 11px;
+    color: var(--accent2);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+    display: none;
+  }
+  .analyzing-bar.visible { display: flex; }
+  .spin {
+    width: 14px; height: 14px;
+    border: 2px solid rgba(0,136,255,0.3);
+    border-top-color: var(--accent2);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ---- Token modal ---- */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.6);
+    display: none; align-items: center; justify-content: center;
+    z-index: 100;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--bg2);
+    border: 1px solid var(--border2);
+    border-radius: 10px;
+    padding: 24px;
+    min-width: 340px;
+    max-width: 480px;
+  }
+  .modal h3 {
+    font-family: var(--sans);
+    font-size: 15px;
+    margin-bottom: 16px;
+    color: var(--text);
+  }
+  .token-row {
+    display: flex; justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+  }
+  .token-row:last-child { border-bottom: none; }
+  .token-key { color: var(--text2); }
+  .token-val { color: var(--accent); font-weight: 600; }
+  .modal-close {
+    margin-top: 16px;
+    font-family: var(--sans);
+    font-size: 12px;
+    width: 100%;
+  }
+
+  /* ---- Empty state ---- */
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    gap: 10px;
+    color: var(--text3);
+    font-size: 13px;
+    text-align: center;
+    padding: 40px;
+  }
+  .empty-icon { font-size: 40px; margin-bottom: 6px; opacity: 0.4; }
+  .empty-title { font-family: var(--sans); font-size: 15px; color: var(--text2); }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text3); }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="logo">
+    <span class="logo-icon">🔍</span>
+    LogAgent
+  </div>
+  <div class="status-pill">
+    <div class="status-dot" id="llmDot"></div>
+    <span id="llmStatus">Checking LLM...</span>
+  </div>
+  <div class="status-pill">
+    <div class="status-dot" id="repoDot"></div>
+    <span id="repoStatus">0 repos</span>
+  </div>
+  <div class="header-spacer"></div>
+  <div class="token-badge" id="tokenBadge" onclick="openTokenModal()">Tokens: 0</div>
+</div>
+
+<!-- Layout -->
+<div class="layout">
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+
+    <div class="sidebar-section">
+      <div class="section-title">Upload Log</div>
+      <div class="file-drop" id="fileDrop" ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
+        <input type="file" id="logFileInput" accept=".log,.txt,.logcat" onchange="onFileSelect(event)">
+        <div>📄 Drop log file or click to browse</div>
+        <div class="filename" id="fileLabel"></div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="section-title">Issue Context</div>
+      <div class="input-group">
+        <div class="input-label">Summary</div>
+        <input type="text" id="issueSummary" placeholder="e.g. App crashes on media playback">
+      </div>
+      <div class="input-group">
+        <div class="input-label">Description</div>
+        <textarea id="issueDesc" placeholder="Tester notes, steps to reproduce..."></textarea>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="section-title">Extra Context</div>
+      <textarea id="extraContext" placeholder="e.g. The service name is MediaBridgeService, the repo uses coroutines Flow..."></textarea>
+    </div>
+
+    <div class="sidebar-section">
+      <button class="btn btn-primary" id="analyzeBtn" onclick="startAnalysis()">▶ Analyze Log</button>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="section-title">Repos</div>
+      <div class="input-group" style="flex-direction:row;gap:6px;">
+        <input type="text" id="repoUrl" placeholder="https://github.com/org/repo" style="flex:1">
+        <button class="btn btn-secondary" style="width:auto;padding:7px 10px" onclick="addRepo()">+</button>
+      </div>
+      <div class="repos-list" id="reposList"></div>
+    </div>
+
+    <div class="sidebar-section" style="flex:1;overflow:hidden;display:flex;flex-direction:column;">
+      <div class="section-title">Log Files</div>
+      <div class="logs-list" id="logsList"></div>
+    </div>
+
+  </div>
+
+  <!-- Content -->
+  <div class="content">
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <div class="tab active" id="tab-split" onclick="switchTab('split')">⚡ Analysis</div>
+      <div class="tab" id="tab-chat" onclick="switchTab('chat')">💬 Chat</div>
+    </div>
+
+    <!-- Analyzing bar -->
+    <div class="analyzing-bar" id="analyzingBar">
+      <div class="spin"></div>
+      <span id="analyzingMsg">Running agent analysis...</span>
+    </div>
+
+    <!-- Panels -->
+    <div class="panels">
+
+      <!-- Split view -->
+      <div class="panel-view split-panels active" id="view-split">
+
+        <!-- LLM Raw -->
+        <div class="split-pane">
+          <div class="pane-header">
+            <div class="pane-dot llm"></div>
+            LLM Reasoning Stream
+          </div>
+          <div class="pane-content" id="llmPane">
+            <div class="empty-state">
+              <div class="empty-icon">🧠</div>
+              <div class="empty-title">LLM Thinking</div>
+              Raw reasoning steps, tool calls and observations from the model will appear here.
+            </div>
+          </div>
+        </div>
+
+        <!-- Agent Verdict -->
+        <div class="split-pane">
+          <div class="pane-header">
+            <div class="pane-dot agent"></div>
+            Agent Verdict
+          </div>
+          <div class="pane-content" id="agentPane">
+            <div class="empty-state">
+              <div class="empty-icon">🎯</div>
+              <div class="empty-title">Awaiting Analysis</div>
+              The structured verdict and blame analysis will appear here after the agent finishes.
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Chat view -->
+      <div class="panel-view chat-view" id="view-chat">
+        <div class="chat-messages" id="chatMessages">
+          <div class="empty-state">
+            <div class="empty-icon">💬</div>
+            <div class="empty-title">Follow-up Chat</div>
+            After analysis, ask follow-up questions like "What does the Repository do when it times out?" or "Explain the service layer issue in more detail."
+          </div>
+        </div>
+        <div class="chat-input-area">
+          <div class="chat-input-wrap">
+            <textarea class="chat-input" id="chatInput" placeholder="Ask about the analysis... (Shift+Enter for newline)" rows="2" onkeydown="onChatKey(event)"></textarea>
+          </div>
+          <button class="send-btn" id="sendBtn" onclick="sendChat()" title="Send">➤</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Token modal -->
+<div class="modal-overlay" id="tokenModal" onclick="if(event.target===this)closeTokenModal()">
+  <div class="modal">
+    <h3>📊 Token Usage</h3>
+    <div id="tokenRows"></div>
+    <button class="btn btn-secondary modal-close" onclick="resetTokens()">Reset Counters</button>
+    <button class="btn btn-primary modal-close" style="margin-top:6px" onclick="closeTokenModal()">Close</button>
+  </div>
+</div>
+
+<script>
+// =============================== State
+let state = {
+  logFilename: null,
+  analysisResult: null,
+  chatHistory: [],
+  ws: null,
+  analyzing: false,
+  chatting: false,
+  tokenUsage: {},
+};
+
+// =============================== Init
+window.addEventListener('DOMContentLoaded', async () => {
+  await checkStatus();
+  await loadLogs();
+  setInterval(checkStatus, 15000);
+  setInterval(loadLogs, 10000);
+});
+
+async function checkStatus() {
+  try {
+    const r = await fetch('/api/status');
+    const d = await r.json();
+    document.getElementById('llmDot').className = 'status-dot ' + (d.llm_available ? 'ok' : 'err');
+    document.getElementById('llmStatus').textContent = d.llm_available
+      ? `${d.llm_model}`
+      : 'LLM offline';
+    document.getElementById('repoDot').className = 'status-dot ' + (d.repos_indexed > 0 ? 'ok' : '');
+    document.getElementById('repoStatus').textContent = `${d.repos_indexed} repo${d.repos_indexed !== 1 ? 's' : ''}`;
+    state.tokenUsage = d.token_usage || {};
+    updateTokenBadge();
+    loadRepos();
+  } catch (e) {
+    document.getElementById('llmDot').className = 'status-dot err';
+    document.getElementById('llmStatus').textContent = 'Server offline';
+  }
+}
+
+async function loadRepos() {
+  try {
+    const r = await fetch('/api/repos');
+    const d = await r.json();
+    const list = document.getElementById('reposList');
+    list.innerHTML = '';
+    for (const [repo, stats] of Object.entries(d.repos || {})) {
+      const div = document.createElement('div');
+      div.className = 'repo-item';
+      div.innerHTML = `<span class="repo-name" title="${repo}">${repo}</span><span class="repo-badge">${stats.chunks}c</span>`;
+      list.appendChild(div);
+    }
+    if (Object.keys(d.repos || {}).length === 0) {
+      list.innerHTML = '<div style="font-size:11px;color:var(--text3);padding:4px 6px">No repos indexed</div>';
+    }
+  } catch(e) {}
+}
+
+async function loadLogs() {
+  try {
+    const r = await fetch('/api/logs');
+    const d = await r.json();
+    const list = document.getElementById('logsList');
+    list.innerHTML = '';
+    for (const log of d.logs || []) {
+      const div = document.createElement('div');
+      div.className = 'log-item' + (log === state.logFilename ? ' active' : '');
+      div.textContent = log;
+      div.onclick = () => selectLog(log);
+      list.appendChild(div);
+    }
+  } catch(e) {}
+}
+
+function selectLog(filename) {
+  state.logFilename = filename;
+  document.getElementById('fileLabel').textContent = filename;
+  loadLogs();
+}
+
+// =============================== File handling
+function onFileSelect(event) {
+  const file = event.target.files[0];
+  if (file) uploadFile(file);
+}
+function onDragOver(e) { e.preventDefault(); e.currentTarget.classList.add('over'); }
+function onDragLeave(e) { e.currentTarget.classList.remove('over'); }
+function onDrop(e) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('over');
+  const file = e.dataTransfer.files[0];
+  if (file) uploadFile(file);
+}
+
+async function uploadFile(file) {
+  const fd = new FormData();
+  fd.append('log_file', file);
+  fd.append('issue_summary', '');
+  fd.append('issue_description', '');
+  fd.append('extra_context', '');
+
+  // Just upload the file to get it stored
+  document.getElementById('fileLabel').textContent = `⏫ Uploading ${file.name}...`;
+  try {
+    // Use the analyze endpoint but we'll override below
+    const r = await fetch('/api/analyze', { method: 'POST', body: fd });
+    const d = await r.json();
+    state.logFilename = file.name;
+    document.getElementById('fileLabel').textContent = file.name;
+    await loadLogs();
+    // Auto-populate result if server already returned one
+    if (d.final_answer) {
+      renderResult(d);
+    }
+  } catch(e) {
+    document.getElementById('fileLabel').textContent = `Error: ${e.message}`;
+  }
+}
+
+// =============================== Analysis
+async function startAnalysis() {
+  if (state.analyzing) return;
+
+  const summary = document.getElementById('issueSummary').value;
+  const desc = document.getElementById('issueDesc').value;
+  const extra = document.getElementById('extraContext').value;
+
+  if (!state.logFilename && !summary) {
+    alert('Please upload a log file or enter an issue summary first.');
+    return;
+  }
+
+  state.analyzing = true;
+  document.getElementById('analyzeBtn').disabled = true;
+  document.getElementById('analyzingBar').classList.add('visible');
+  document.getElementById('analyzingMsg').textContent = 'Initializing agent...';
+
+  // Clear panes
+  document.getElementById('llmPane').innerHTML = '';
+  document.getElementById('agentPane').innerHTML = '';
+
+  // Connect WebSocket
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  state.ws = new WebSocket(`${proto}://${location.host}/ws/analyze`);
+
+  state.ws.onopen = () => {
+    state.ws.send(JSON.stringify({
+      mode: 'analyze',
+      log_filename: state.logFilename || '',
+      issue_summary: summary,
+      issue_description: desc,
+      extra_context: extra,
+    }));
+  };
+
+  state.ws.onmessage = (ev) => {
+    const msg = JSON.parse(ev.data);
+    handleWsMessage(msg);
+  };
+
+  state.ws.onerror = (e) => {
+    stopAnalyzing();
+    appendLlmPane(`<div style="color:var(--error)">WebSocket error. Is the server running?</div>`);
+  };
+
+  state.ws.onclose = () => stopAnalyzing();
+}
+
+function handleWsMessage(msg) {
+  if (msg.type === 'step') {
+    const stepType = msg.step_type;
+    document.getElementById('analyzingMsg').textContent =
+      stepType === 'action' ? `🔧 Tool: ${msg.tool}` :
+      stepType === 'think' ? '🧠 Thinking...' :
+      stepType === 'observation' ? '👁 Observing...' :
+      stepType === 'final' ? '✅ Building verdict...' : 'Running...';
+
+    appendLlmStep(msg);
+  }
+  else if (msg.type === 'done') {
+    stopAnalyzing();
+    state.analysisResult = msg;
+    state.tokenUsage = msg.token_usage || {};
+    updateTokenBadge();
+    renderResult(msg);
+
+    // Prime chat history
+    state.chatHistory = [
+      {
+        role: 'assistant',
+        content: msg.final_answer || '',
+      }
+    ];
+  }
+  else if (msg.type === 'error') {
+    stopAnalyzing();
+    appendLlmPane(`<div style="color:var(--error)">Error: ${msg.message}</div>`);
+  }
+}
+
+function stopAnalyzing() {
+  state.analyzing = false;
+  document.getElementById('analyzeBtn').disabled = false;
+  document.getElementById('analyzingBar').classList.remove('visible');
+}
+
+// =============================== LLM pane rendering
+function appendLlmStep(msg) {
+  const pane = document.getElementById('llmPane');
+  const div = document.createElement('div');
+
+  if (msg.step_type === 'think') {
+    div.className = 'think-block';
+    div.innerHTML = `<strong style="color:var(--accent2);font-size:10px">💭 THINK</strong><br>${escHtml(msg.content)}`;
+  } else if (msg.step_type === 'action') {
+    div.className = 'action-block';
+    div.innerHTML = `<strong style="color:var(--accent3);font-size:10px">🔧 ACTION: ${escHtml(msg.tool || '')}</strong><br>${escHtml(msg.content)}`;
+  } else if (msg.step_type === 'observation') {
+    div.className = 'observe-block';
+    div.innerHTML = `<strong style="color:var(--accent);font-size:10px">👁 OBSERVE</strong><br>${escHtml(msg.content.substring(0,400))}${msg.content.length>400?'…':''}`;
+  } else if (msg.step_type === 'final') {
+    div.style.cssText = 'background:rgba(245,197,66,0.06);border-left:3px solid var(--warn);padding:8px 12px;margin:6px 0;border-radius:0 4px 4px 0;';
+    div.innerHTML = `<strong style="color:var(--warn);font-size:10px">✅ FINAL ANSWER</strong>`;
+  } else {
+    div.textContent = msg.content;
+  }
+
+  pane.appendChild(div);
+  pane.scrollTop = pane.scrollHeight;
+}
+
+function appendLlmPane(html) {
+  const pane = document.getElementById('llmPane');
+  const div = document.createElement('div');
+  div.innerHTML = html;
+  pane.appendChild(div);
+  pane.scrollTop = pane.scrollHeight;
+}
+
+// =============================== Agent verdict rendering
+function renderResult(data) {
+  const verdict = data.verdict || 'INCONCLUSIVE';
+  const blameLayer = data.blame_layer || '';
+  const finalAnswer = data.final_answer || '';
+
+  const verdictClass = verdict === 'APP BUG' ? 'app-bug' : verdict === 'EXTERNAL BUG' ? 'ext-bug' : 'inconclusive';
+  const verdictIcon = verdict === 'APP BUG' ? '🔴' : verdict === 'EXTERNAL BUG' ? '🟡' : '⚪';
+  const verdictColor = verdict === 'APP BUG' ? 'var(--app-bug)' : verdict === 'EXTERNAL BUG' ? 'var(--ext-bug)' : 'var(--inconclusive)';
+
+  let stepsHtml = '';
+  if (data.steps && data.steps.length) {
+    const actionSteps = data.steps.filter(s => s.type === 'action');
+    if (actionSteps.length) {
+      stepsHtml = `<div class="steps-list">` + actionSteps.map(s =>
+        `<div class="step-item"><span class="step-type action">TOOL</span><span class="step-content">${escHtml(s.content)}</span></div>`
+      ).join('') + `</div>`;
+    }
+  }
+
+  const html = `
+    <div class="verdict-banner ${verdictClass}">
+      <div class="verdict-icon">${verdictIcon}</div>
+      <div class="verdict-text">
+        <div class="verdict-title" style="color:${verdictColor}">${verdict}</div>
+        <div class="verdict-subtitle">Analysis complete · ${(data.steps||[]).length} agent steps</div>
+      </div>
+    </div>
+    ${blameLayer ? `<div class="blame-layer">📍 Blame Layer: ${blameLayer}</div>` : ''}
+    ${stepsHtml}
+    <div class="agent-markdown">${markdownToHtml(finalAnswer)}</div>
+  `;
+
+  document.getElementById('agentPane').innerHTML = html;
+}
+
+// =============================== Chat
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel-view').forEach(v => v.classList.remove('active'));
+  document.getElementById(`tab-${tab}`).classList.add('active');
+  document.getElementById(`view-${tab}`).classList.add('active');
+}
+
+function onChatKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendChat();
+  }
+}
+
+async function sendChat() {
+  if (state.chatting) return;
+  const input = document.getElementById('chatInput');
+  const msg = input.value.trim();
+  if (!msg) return;
+
+  input.value = '';
+  appendChatMsg('user', msg);
+  state.chatHistory.push({ role: 'user', content: msg });
+
+  state.chatting = true;
+  document.getElementById('sendBtn').disabled = true;
+
+  const typingDiv = appendChatTyping();
+
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const ws = new WebSocket(`${proto}://${location.host}/ws/analyze`);
+
+  ws.onopen = () => {
+    ws.send(JSON.stringify({
+      mode: 'chat',
+      history: state.chatHistory.slice(-10),  // last 10 turns
+      message: msg,
+      log_filename: state.logFilename || '',
+    }));
+  };
+
+  let responseTokens = [];
+  ws.onmessage = (ev) => {
+    const data = JSON.parse(ev.data);
+    if (data.type === 'token') {
+      responseTokens.push(data.content);
+      typingDiv.querySelector('.msg-bubble').textContent = responseTokens.join('');
+    } else if (data.type === 'chat_done') {
+      const fullText = data.full || responseTokens.join('');
+      typingDiv.querySelector('.msg-bubble').textContent = fullText;
+      state.chatHistory.push({ role: 'assistant', content: fullText });
+      state.tokenUsage = data.token_usage || {};
+      updateTokenBadge();
+      finishChat();
+      ws.close();
+    }
+  };
+
+  ws.onerror = () => {
+    typingDiv.querySelector('.msg-bubble').textContent = 'Connection error. Is the server running?';
+    finishChat();
+  };
+
+  function finishChat() {
+    state.chatting = false;
+    document.getElementById('sendBtn').disabled = false;
+    scrollChat();
+  }
+}
+
+function appendChatMsg(role, content) {
+  const msgs = document.getElementById('chatMessages');
+  const div = document.createElement('div');
+  div.className = `chat-msg ${role}`;
+  div.innerHTML = `
+    <div class="msg-avatar">${role === 'user' ? 'U' : 'A'}</div>
+    <div class="msg-bubble">${escHtml(content)}</div>
+  `;
+  msgs.appendChild(div);
+  scrollChat();
+  return div;
+}
+
+function appendChatTyping() {
+  const msgs = document.getElementById('chatMessages');
+  const div = document.createElement('div');
+  div.className = 'chat-msg assistant';
+  div.innerHTML = `
+    <div class="msg-avatar">A</div>
+    <div class="msg-bubble"></div>
+  `;
+  msgs.appendChild(div);
+  scrollChat();
+  return div;
+}
+
+function scrollChat() {
+  const msgs = document.getElementById('chatMessages');
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+// =============================== Repo management
+async function addRepo() {
+  const url = document.getElementById('repoUrl').value.trim();
+  if (!url) return;
+  document.getElementById('repoUrl').value = '';
+  document.getElementById('repoStatus').textContent = 'Indexing...';
+  try {
+    const r = await fetch('/api/repos/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
+    const d = await r.json();
+    if (d.status === 'ok') {
+      await loadRepos();
+      await checkStatus();
+    } else {
+      alert('Error: ' + (d.error || 'Unknown'));
+    }
+  } catch(e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+// =============================== Token modal
+function updateTokenBadge() {
+  const t = state.tokenUsage;
+  document.getElementById('tokenBadge').textContent =
+    `Tokens: ${(t.total_tokens || 0).toLocaleString()}`;
+}
+
+function openTokenModal() {
+  const t = state.tokenUsage;
+  document.getElementById('tokenRows').innerHTML = Object.entries({
+    'Prompt Tokens': t.prompt_tokens || 0,
+    'Completion Tokens': t.completion_tokens || 0,
+    'Total Tokens': t.total_tokens || 0,
+    'API Requests': t.requests || 0,
+    'Avg Latency (ms)': t.avg_latency_ms || 0,
+    'Total Duration (ms)': t.total_duration_ms || 0,
+  }).map(([k, v]) => `
+    <div class="token-row">
+      <span class="token-key">${k}</span>
+      <span class="token-val">${typeof v === 'number' ? v.toLocaleString() : v}</span>
+    </div>
+  `).join('');
+  document.getElementById('tokenModal').classList.add('open');
+}
+
+function closeTokenModal() {
+  document.getElementById('tokenModal').classList.remove('open');
+}
+
+async function resetTokens() {
+  await fetch('/api/token_usage/reset', { method: 'POST' });
+  state.tokenUsage = {};
+  updateTokenBadge();
+  closeTokenModal();
+}
+
+// =============================== Helpers
+function escHtml(s) {
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function markdownToHtml(md) {
+  if (!md) return '';
+  let html = escHtml(md);
+  // Headers
+  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+  // Code blocks
+  html = html.replace(/```[\w]*\n([\s\S]*?)```/gm, '<pre><code>$1</code></pre>');
+  // Inline code
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+  // Bold
+  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  // Unordered list
+  html = html.replace(/^[-*] (.+)$/gm, '<li>$1</li>');
+  html = html.replace(/(<li>.*<\/li>\n?)+/gm, (m) => `<ul>${m}</ul>`);
+  // Paragraphs
+  html = html.replace(/\n\n/g, '</p><p>');
+  html = `<p>${html}</p>`;
+  html = html.replace(/<p><\/p>/g, '');
+  html = html.replace(/<p>(<[hup])/g, '$1');
+  html = html.replace(/(<\/[hup][l23i]>)<\/p>/g, '$1');
+  return html;
+}
+</script>
+</body>
+</html>
