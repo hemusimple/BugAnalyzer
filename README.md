@@ -59,7 +59,7 @@ cp .env.example .env
 # Edit .env and fill in your credentials
 
 # 5. Pull the LLM model
-ollama pull mistral
+ollama pull qwen2.5-coder:7b
 
 # 6. Start the server
 python -m api.main
@@ -91,7 +91,7 @@ copy .env.example .env
 notepad .env
 
 :: 5. Pull the LLM model
-ollama pull mistral
+ollama pull qwen2.5-coder:7b
 
 :: 6. Start the server
 python -m api.main
