@@ -32,13 +32,76 @@ log-analyzer/
 └── start.sh / start.bat
 ```
 
-## Quick Start
+## Prerequisites
 
-1. Copy `.env.example` → `.env` and fill credentials
-2. Install: `pip install -r requirements.txt`
-3. Start Ollama: `ollama pull mistral`
-4. Run: `python -m api.main`
-5. Open: `http://localhost:8000`
+- Python 3.9+
+- [Ollama](https://ollama.com) installed and running
+- Git
+
+---
+
+## Setup — Linux
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/hemusimple/BugAnalyzer.git
+cd BugAnalyzer
+
+# 2. Create and activate a virtual environment
+python3 -m venv .venv
+source .venv/bin/activate
+
+# 3. Install dependencies
+pip install -r requirements.txt
+
+# 4. Configure environment
+cp .env.example .env
+# Edit .env and fill in your credentials
+
+# 5. Pull the LLM model
+ollama pull mistral
+
+# 6. Start the server
+python -m api.main
+# or use the helper script:
+bash start.sh
+```
+
+Open `http://localhost:8000` in your browser.
+
+---
+
+## Setup — Windows
+
+```cmd
+:: 1. Clone the repository
+git clone https://github.com/hemusimple/BugAnalyzer.git
+cd BugAnalyzer
+
+:: 2. Create and activate a virtual environment
+python -m venv .venv
+.venv\Scripts\activate
+
+:: 3. Install dependencies
+pip install -r requirements.txt
+
+:: 4. Configure environment
+copy .env.example .env
+:: Open .env in Notepad and fill in your credentials
+notepad .env
+
+:: 5. Pull the LLM model
+ollama pull mistral
+
+:: 6. Start the server
+python -m api.main
+:: or use the helper script:
+start.bat
+```
+
+Open `http://localhost:8000` in your browser.
+
+---
 
 ## Features
 
